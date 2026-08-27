@@ -1,0 +1,828 @@
+<title>Case Notification</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ── tokens ── */
+  :root {
+    --bg:          #F4F7FB;
+    --surface:     #FFFFFF;
+    --surface-2:   #EEF2F8;
+    --border:      #DDE3EE;
+    --accent:      #0078D4;
+    --accent-muted:#E6F2FC;
+    --accent-dark: #005FA3;
+    --text-1:      #0D1117;
+    --text-2:      #505C6E;
+    --text-3:      #8592A6;
+    --code-bg:     #EEF2F8;
+    --step-num:    #0078D4;
+    --warning-bg:  #FFF8E6;
+    --warning-border:#F0C040;
+    --tag-bg:      #E6F2FC;
+    --tag-text:    #005FA3;
+    --scrollbar:   #C9D4E2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:          #0F1318;
+      --surface:     #181D25;
+      --surface-2:   #1E2530;
+      --border:      #2A3245;
+      --accent:      #3A9EE8;
+      --accent-muted:#0D2A42;
+      --accent-dark: #6BBFF5;
+      --text-1:      #E8EDF5;
+      --text-2:      #8A96A8;
+      --text-3:      #5A6475;
+      --code-bg:     #1E2530;
+      --step-num:    #3A9EE8;
+      --warning-bg:  #2A2210;
+      --warning-border:#8A6A00;
+      --tag-bg:      #0D2A42;
+      --tag-text:    #6BBFF5;
+      --scrollbar:   #2A3245;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:          #0F1318;
+    --surface:     #181D25;
+    --surface-2:   #1E2530;
+    --border:      #2A3245;
+    --accent:      #3A9EE8;
+    --accent-muted:#0D2A42;
+    --accent-dark: #6BBFF5;
+    --text-1:      #E8EDF5;
+    --text-2:      #8A96A8;
+    --text-3:      #5A6475;
+    --code-bg:     #1E2530;
+    --step-num:    #3A9EE8;
+    --warning-bg:  #2A2210;
+    --warning-border:#8A6A00;
+    --tag-bg:      #0D2A42;
+    --tag-text:    #6BBFF5;
+    --scrollbar:   #2A3245;
+  }
+
+  /* ── reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    background: var(--bg);
+    color: var(--text-1);
+    min-height: 100vh;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+  /* ── layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+  }
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 32px;
+    height: 56px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-icon {
+    width: 26px; height: 26px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .topbar-icon svg { display: block; }
+  .topbar-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+    letter-spacing: -0.01em;
+  }
+  .topbar-sep {
+    color: var(--border);
+    font-size: 18px;
+    font-weight: 300;
+    margin: 0 2px;
+  }
+  .topbar-sub {
+    font-size: 13px;
+    color: var(--text-3);
+  }
+  .topbar-badge {
+    margin-left: auto;
+    background: var(--tag-bg);
+    color: var(--tag-text);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* ── sidebar ── */
+  .sidebar {
+    position: sticky;
+    top: 0;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 28px 0;
+  }
+  .nav-group-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    padding: 0 20px 8px;
+    margin-top: 20px;
+  }
+  .nav-group-label:first-child { margin-top: 0; }
+  .nav-link {
+    display: block;
+    padding: 6px 20px;
+    font-size: 13.5px;
+    color: var(--text-2);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .nav-link:hover {
+    color: var(--text-1);
+    background: var(--surface-2);
+  }
+  .nav-link.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--accent-muted);
+    font-weight: 500;
+  }
+  .nav-link-sub {
+    padding-left: 32px;
+    font-size: 13px;
+  }
+
+  /* ── main content ── */
+  main {
+    padding: 48px 56px 80px;
+    max-width: 860px;
+  }
+
+  /* ── section anchors ── */
+  .section { margin-bottom: 64px; }
+  .section:last-child { margin-bottom: 0; }
+
+  .section-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-family: 'Sora', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.25;
+    text-wrap: balance;
+    color: var(--text-1);
+    margin-bottom: 16px;
+  }
+  h2 {
+    font-family: 'Sora', sans-serif;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    color: var(--text-1);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 8px;
+    margin-top: 28px;
+  }
+  p { color: var(--text-2); margin-bottom: 14px; max-width: 68ch; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── lead ── */
+  .lead {
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--text-2);
+    margin-bottom: 28px;
+    max-width: 60ch;
+  }
+
+  /* ── feature chips ── */
+  .feature-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+  .feature-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .chip-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* ── prereqs ── */
+  .prereq-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 0;
+  }
+  .prereq-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 14px;
+    font-size: 13.5px;
+    color: var(--text-2);
+  }
+  .prereq-list li .req-label {
+    font-weight: 500;
+    color: var(--text-1);
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  /* ── steps ── */
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 0 16px;
+    position: relative;
+  }
+  .step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 44px;
+    bottom: 0;
+    width: 1px;
+    background: var(--border);
+    transform: translateX(-50%);
+  }
+  .step-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--accent-muted);
+    border: 1.5px solid var(--accent);
+    display: grid;
+    place-items: center;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--step-num);
+    flex-shrink: 0;
+    z-index: 1;
+    position: relative;
+  }
+  .step-body { padding: 6px 0 32px; }
+  .step-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 6px;
+  }
+  .step-body p { font-size: 13.5px; margin-bottom: 10px; max-width: none; }
+
+  /* ── code ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    color: var(--accent-dark);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  :root[data-theme="dark"] code,
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) code {
+    color: var(--accent-dark);
+  }}
+  pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    color: var(--text-1);
+    line-height: 1.65;
+    margin-bottom: 12px;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  /* ── config table ── */
+  .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  thead th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  thead th:first-child { border-radius: 8px 0 0 0; }
+  thead th:last-child  { border-radius: 0 8px 0 0; }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 11px 14px; color: var(--text-2); vertical-align: top; }
+  tbody td:first-child { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); white-space: nowrap; }
+  .table-wrap table {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .val-example { font-style: italic; color: var(--text-3); font-size: 12px; margin-top: 3px; display: block; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── warning / note ── */
+  .note {
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-2);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .note-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── info box ── */
+  .info {
+    background: var(--accent-muted);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 16px;
+  }
+
+  /* ── screenshot placeholder ── */
+  .screenshot {
+    background: var(--surface);
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 0;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+  .screenshot-bar {
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .screenshot-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .screenshot-caption {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+  .screenshot-body {
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .screenshot-label {
+    font-size: 12px;
+    color: var(--text-3);
+    text-align: center;
+  }
+
+  /* ── flow diagram ── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 20px 0;
+    row-gap: 10px;
+  }
+  .flow-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    text-align: center;
+    min-width: 120px;
+  }
+  .flow-box strong {
+    display: block;
+    font-family: 'Sora', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 2px;
+  }
+  .flow-arrow {
+    color: var(--text-3);
+    font-size: 16px;
+    padding: 0 6px;
+    flex-shrink: 0;
+  }
+
+  /* ── troubleshoot ── */
+  .trouble-list { display: flex; flex-direction: column; gap: 12px; }
+  .trouble-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .trouble-q {
+    padding: 12px 16px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-1);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .trouble-a {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.65;
+  }
+
+  /* ── mobile ── */
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    main { padding: 32px 24px 60px; }
+  }
+</style>
+
+<div class="shell">
+  <!-- top bar -->
+  <header class="topbar">
+    <div class="topbar-icon">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 3h10M2 7h6M2 11h8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span class="topbar-title">Case Notification</span>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-sub">Installation &amp; Configuration Guide</span>
+    <span class="topbar-badge">Internal</span>
+  </header>
+
+  <!-- sidebar nav -->
+  <nav class="sidebar" aria-label="Page navigation">
+    <span class="nav-group-label">Getting started</span>
+    <a class="nav-link" href="#overview">Overview</a>
+    <a class="nav-link" href="#prerequisites">Prerequisites</a>
+    <a class="nav-link" href="#installation">Installation</a>
+
+    <span class="nav-group-label">Reference</span>
+    <a class="nav-link" href="#configuration">Configuration</a>
+    <a class="nav-link nav-link-sub" href="#config-view">Changing the view</a>
+    <a class="nav-link nav-link-sub" href="#config-email">Email settings</a>
+    <a class="nav-link" href="#how-it-works">How It Works</a>
+    <a class="nav-link" href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <!-- main content -->
+  <main>
+
+    <!-- OVERVIEW -->
+    <section class="section" id="overview">
+      <div class="section-eyebrow">Overview</div>
+      <h1>D365 Case Notification</h1>
+      <p class="lead">
+        A lightweight Windows alert that polls a Dynamics 365 Customer Engagement view for new unassigned cases and notifies you with a Windows toast notification and an Outlook email — automatically, in the background, every 10 minutes during working hours.
+      </p>
+
+      <div class="feature-row">
+        <div class="feature-chip"><span class="chip-dot"></span>Windows toast notifications</div>
+        <div class="feature-chip"><span class="chip-dot"></span>Outlook email alert</div>
+        <div class="feature-chip"><span class="chip-dot"></span>Runs silently in background</div>
+        <div class="feature-chip"><span class="chip-dot"></span>No app registration needed</div>
+        <div class="feature-chip"><span class="chip-dot"></span>Self-distributable to colleagues</div>
+      </div>
+
+      <div class="screenshot">
+        <div class="screenshot-bar">
+          <span class="screenshot-dot" style="background:#FF6058"></span>
+          <span class="screenshot-dot" style="background:#FFBC2E"></span>
+          <span class="screenshot-dot" style="background:#28C840"></span>
+          <span class="screenshot-caption">Windows toast notification</span>
+        </div>
+        <div class="screenshot-body" style="padding:0">
+          <img src="CNextCaseNotificationToast.png" style="width:100%;display:block;border-radius:0 0 8px 8px;">
+        </div>
+      </div>
+
+      <div class="screenshot">
+        <div class="screenshot-bar">
+          <span class="screenshot-dot" style="background:#FF6058"></span>
+          <span class="screenshot-dot" style="background:#FFBC2E"></span>
+          <span class="screenshot-dot" style="background:#28C840"></span>
+          <span class="screenshot-caption">Outlook email alert</span>
+        </div>
+        <div class="screenshot-body" style="padding:0">
+          <img src="CNextCaseNotificationEmail.png" style="width:100%;display:block;border-radius:0 0 8px 8px;">
+        </div>
+      </div>
+    </section>
+
+    <!-- PREREQUISITES -->
+    <section class="section" id="prerequisites">
+      <h2>Prerequisites</h2>
+      <p>Ensure the following are in place on the PC before running the installer.</p>
+      <ul class="prereq-list">
+        <li>
+          <span class="req-label">Windows 10 / 11</span>
+          Toast notifications require an interactive Windows session.
+        </li>
+        <li>
+          <span class="req-label">PowerShell 5.1+</span>
+          Included by default on Windows 10 and 11.
+        </li>
+        <li>
+          <span class="req-label">MSAL.PS module</span>
+          For authenticating to Dynamics 365. Install once per PC:<br>
+          <code>Install-Module MSAL.PS -Scope CurrentUser</code>
+        </li>
+        <li>
+          <span class="req-label">Outlook (desktop)</span>
+          Must be installed and signed in. Required for email alerts only — toasts work without it.
+        </li>
+        <li>
+          <span class="req-label">D365 CE access</span>
+          The user must have access to the configured view in Dynamics 365.
+        </li>
+      </ul>
+    </section>
+
+    <!-- INSTALLATION -->
+    <section class="section" id="installation">
+      <h2>Installation</h2>
+      <p>The installer sets up all files and schedules the background task. Run it once per PC.</p>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Place all files in one folder</div>
+            <p>Put the following files together in the same folder (e.g. a network share or USB drive you hand to colleagues):</p>
+            <pre><code>CNextCaseNotificationInstall.ps1
+CNextCaseNotification.ps1
+CNextCaseNotificationIcon.ico
+CNextCaseNotificationRun.vbs</code></pre>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Run the installer</div>
+            <p>Right-click <code>CNextCaseNotificationInstall.ps1</code> and choose <strong>Run with PowerShell</strong>, or run from a PowerShell prompt:</p>
+            <pre><code>powershell -ExecutionPolicy Bypass -File .\CNextCaseNotificationInstall.ps1</code></pre>
+            <p>The installer will create <code>C:\Scripts\CaseNotification\</code>, copy the files, and register the scheduled task. It is safe to re-run.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Sign in to Dynamics 365 (first run only)</div>
+            <p>The very first time the task fires, a browser window will open asking you to sign in to Dynamics 365. After that, the token is cached on disk and no further sign-in is needed.</p>
+            <div class="note">
+              <span class="note-icon">⚠️</span>
+              <span>If the task runs while no one is logged on to Windows, the first-run sign-in prompt will not appear. Log on once and let the task fire — or trigger it manually from Task Scheduler — to complete authentication.</span>
+            </div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Allow Outlook to send (first alert only)</div>
+            <p>On the first alert that triggers an email, Outlook may display a security dialog: <em>"A program is trying to send an email on your behalf."</em> Click <strong>Allow</strong>. This is a one-time Outlook setting.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="info">
+        <strong>What the installer creates:</strong>
+        <code>C:\Scripts\CaseNotification\</code> — folder with all script files<br>
+        Task Scheduler job <strong>"CNext Case Notification"</strong> — fires every 10 min, 08:00–17:00, Mon–Fri
+      </div>
+    </section>
+
+    <!-- CONFIGURATION -->
+    <section class="section" id="configuration">
+      <h2>Configuration</h2>
+      <p>All settings are in the <code># --- config ---</code> block at the top of <code>CNextCaseNotification.ps1</code> inside <code>C:\Scripts\CaseNotification\</code>. Open the file in Notepad or any editor to change them.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>What it does</th>
+              <th>Default</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>$orgUrl</td>
+              <td>Your Dynamics 365 organization URL.
+                <span class="val-example">"https://yourorg.crm4.dynamics.com"</span>
+              </td>
+              <td><code>https://hso.crm4.dynamics.com</code></td>
+            </tr>
+            <tr>
+              <td>$viewId</td>
+              <td>GUID of the personal view to poll. See <a href="#config-view">Changing the view</a> below.
+                <span class="val-example">"1a15c416-6670-eb11-a812-000d3adafcf9"</span>
+              </td>
+              <td>Unpicked cases view</td>
+            </tr>
+            <tr>
+              <td>$sendEmail</td>
+              <td>Set to <code>$false</code> to disable email alerts and use toast-only notifications.</td>
+              <td><code>$true</code></td>
+            </tr>
+            <tr>
+              <td>$notifyEmailOverride</td>
+              <td>Leave empty to send alerts to your own mailbox (auto-detected). Set an address here to redirect to a shared mailbox or another recipient.
+                <span class="val-example">"support@yourorg.com"</span>
+              </td>
+              <td><code>""</code> (auto)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <span class="note-icon">ℹ️</span>
+        <span>Do not change <code>$clientId</code> — it is Microsoft's pre-consented public client ID for Dataverse and requires no app registration in your tenant.</span>
+      </div>
+
+      <h3 id="config-view">Changing the view</h3>
+      <p>The script polls whichever Dynamics 365 view the <code>$viewId</code> points to. To point it at a different view:</p>
+      <ol style="padding-left:20px; color:var(--text-2); font-size:13.5px; line-height:1.8;">
+        <li>Open the view in Dynamics 365 in your browser.</li>
+        <li>Copy the GUID from the URL — it is the value after <code>viewid=</code>.</li>
+        <li>Paste it as the value of <code>$viewId</code> in <code>CNextCaseNotification.ps1</code>.</li>
+      </ol>
+      <div class="note">
+        <span class="note-icon">⚠️</span>
+        <span>The current view is a <strong>personal view</strong> — it is tied to the account that created it. If you distribute this script to colleagues, each person will need their own view with the same filters, or the view must be converted to a system (shared) view by an administrator.</span>
+      </div>
+
+      <h3 id="config-email">Email settings</h3>
+      <p>Email is sent through the Outlook desktop app via COM automation — no credentials are stored anywhere. The recipient is detected at runtime from your signed-in Outlook profile, so the same script file can be handed to any colleague without editing. The detection order is:</p>
+      <ol style="padding-left:20px; color:var(--text-2); font-size:13.5px; line-height:1.8;">
+        <li>Outlook's Exchange primary SMTP address (the actual mailbox mail is sent from).</li>
+        <li>The SMTP address of the first configured Outlook account.</li>
+        <li>The UPN of the account used to sign in to Dynamics 365.</li>
+      </ol>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="section" id="how-it-works">
+      <h2>How It Works</h2>
+      <p>Each run of the script follows the same sequence:</p>
+
+      <div class="flow">
+        <div class="flow-box"><strong>Authenticate</strong>MSAL token (cached)</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-box"><strong>Fetch view</strong>FetchXML from D365</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-box"><strong>Diff</strong>Against CNextCaseNotificationSeen.json</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-box"><strong>Notify</strong>Toast + Outlook email</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-box"><strong>Persist</strong>Update CNextCaseNotificationSeen.json</div>
+      </div>
+
+      <p>A file named <code>CNextCaseNotificationSeen.json</code> is maintained alongside the script in <code>C:\Scripts\CaseNotification\</code>. It records the IDs of every case that has already been notified. Only cases that appear in the view <em>and</em> are absent from that file trigger a notification. This means a case will only generate one notification, even across many poll cycles.</p>
+      <p>The task runs the VBS launcher (<code>CNextCaseNotificationRun.vbs</code>), which in turn starts PowerShell in a hidden window — so no console window ever flashes on screen.</p>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section class="section" id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <div class="trouble-list">
+        <div class="trouble-item">
+          <div class="trouble-q">No toast notifications appear</div>
+          <div class="trouble-a">Check that Windows Focus Assist / Do Not Disturb is not suppressing notifications. Open <strong>Settings → System → Notifications</strong> and confirm notifications are on for <strong>cNext New Case Alert</strong>. Also verify the task is enabled in Task Scheduler.</div>
+        </div>
+        <div class="trouble-item">
+          <div class="trouble-q">No email notifications</div>
+          <div class="trouble-a">Ensure Outlook is installed, open, and signed in. The script sends via Outlook COM — if Outlook is closed, email is skipped but toasts still fire. If Outlook prompts "allow sending", click <strong>Allow</strong>.</div>
+        </div>
+        <div class="trouble-item">
+          <div class="trouble-q">Sign-in prompt never appeared / token not cached</div>
+          <div class="trouble-a">The first-run sign-in requires an interactive session. Open Task Scheduler, right-click <strong>CNext Case Notification</strong>, and choose <strong>Run</strong> — the browser sign-in will appear. After signing in once, all future runs are silent.</div>
+        </div>
+        <div class="trouble-item">
+          <div class="trouble-q">Cases no longer appear (view returns empty)</div>
+          <div class="trouble-a">The <code>$viewId</code> may point to a personal view owned by a different user. Confirm the view ID in <code>CNextCaseNotification.ps1</code> matches a view accessible to your account, or ask an administrator to create a shared system view.</div>
+        </div>
+        <div class="trouble-item">
+          <div class="trouble-q">Task does not run outside of 08:00–17:00</div>
+          <div class="trouble-a">This is by design. The scheduled task is configured to fire only on weekdays between 08:00 and 17:00. To change this, open <strong>Task Scheduler → CNext Case Notification → Properties → Triggers</strong> and edit the repetition settings.</div>
+        </div>
+        <div class="trouble-item">
+          <div class="trouble-q">Re-running the installer after changing CNextCaseNotification.ps1</div>
+          <div class="trouble-a">The installer overwrites all files from the source folder. Edit <code>CNextCaseNotification.ps1</code> in <code>C:\Scripts\CaseNotification\</code> directly — changes there are preserved between task runs and do not require re-installation.</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('.section');
+  const links = document.querySelectorAll('.nav-link');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3, rootMargin: '-56px 0px 0px 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
