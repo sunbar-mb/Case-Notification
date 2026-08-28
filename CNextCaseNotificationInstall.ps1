@@ -8,13 +8,16 @@
    2. Creates  C:\Scripts\CaseNotification
    3. Copies the required files into that folder:
         - CNextCaseNotification.ps1         (the poller)
-        - CNextCaseNotificationConfig.json  (per-user area filter; kept on re-install)
+        - CNextCaseNotificationConfig.json  (per-user settings; written interactively below)
         - CNextCaseNotificationRun.vbs          (launches the poller with no window)
         - CNextCaseNotificationIcon.ico      (toast header badge)
         - CNextCaseNotificationDocs.html     (installation & configuration guide)
         - CNextCaseNotificationToast.png    (screenshot used in the documentation)
         - CNextCaseNotificationEmail.png    (screenshot used in the documentation)
-   4. Registers a Task Scheduler job that runs the poller every
+   4. Prompts for the per-user settings (organization URL, view ID, case Areas)
+      and writes them to CNextCaseNotificationConfig.json. On a re-install the
+      existing values are offered as defaults -- press Enter to keep them.
+   5. Registers a Task Scheduler job that runs the poller every
       10 minutes, 08:00-17:00, Monday-Friday.
 
  Run this from the folder that contains the files above, e.g.:
@@ -144,21 +147,88 @@ foreach ($file in $filesToCopy) {
     }
 }
 
-# --- 3a2. restore or seed the user config ---
-# CNextCaseNotificationConfig.json holds the user's own area filter, so it must
-# survive an override install. If one was preserved from a previous install we
-# restore it; otherwise we seed a fresh copy from the source folder.
+# --- 3a2. configure the user settings (interactive) ---
+# Ask the user for the three per-user settings -- organization URL, view ID, and
+# case Areas -- and write them into CNextCaseNotificationConfig.json, so a
+# colleague never has to hand-edit the JSON. Any existing values (from a config
+# preserved during an override install, else the source config shipped alongside
+# this installer, else built-in placeholders) are shown as defaults: pressing
+# Enter keeps them. sendEmail and notifyEmailOverride aren't prompted for here --
+# they're carried over from an existing config (or left at their defaults).
 $configSrc  = Join-Path $sourceDir $configName
 $configDst  = Join-Path $installDir $configName
+
+# Load whatever settings we already have as the starting point for the defaults.
+$current = $null
 if ($preservedConfig -and (Test-Path $preservedConfig)) {
-    Copy-Item -Path $preservedConfig -Destination $configDst -Force
+    try { $current = Get-Content $preservedConfig -Raw | ConvertFrom-Json } catch {}
+}
+if (-not $current -and (Test-Path $configSrc)) {
+    try { $current = Get-Content $configSrc -Raw | ConvertFrom-Json } catch {}
+}
+
+# Seed defaults from the current config where present, otherwise fall back to
+# the same placeholders the shipped config uses.
+$defOrgUrl    = if ($current -and $current.orgUrl)  { $current.orgUrl.ToString().Trim() }  else { "https://yourorg.crm4.dynamics.com" }
+$defViewId    = if ($current -and $current.viewId)  { $current.viewId.ToString().Trim() }  else { "" }
+$defAreas     = if ($current -and $current.areaFilter) { @($current.areaFilter | Where-Object { $_ -and $_.ToString().Trim() } | ForEach-Object { $_.ToString().Trim() }) } else { @() }
+# Not prompted for -- preserved as-is.
+$defSendEmail = if ($current -and $current.PSObject.Properties['sendEmail'] -and $null -ne $current.sendEmail) { [System.Convert]::ToBoolean($current.sendEmail) } else { $true }
+$defOverride  = if ($current -and $current.PSObject.Properties['notifyEmailOverride']) { $current.notifyEmailOverride.ToString().Trim() } else { "" }
+
+# Prompt helper: shows the current value in [brackets]; Enter keeps it.
+function Read-WithDefault {
+    param([string]$Prompt, [string]$Default)
+    if ($Default) { $answer = Read-Host "$Prompt [$Default]" }
+    else          { $answer = Read-Host $Prompt }
+    if ([string]::IsNullOrWhiteSpace($answer)) { return $Default }
+    return $answer.Trim()
+}
+
+Write-Host ""
+Write-Host "Configure CNext Case Notification" -ForegroundColor Cyan
+Write-Host "  Press Enter to accept the value shown in [brackets]."
+
+# Organization URL -- strip any trailing slash so it joins cleanly with API paths.
+$orgUrlIn = (Read-WithDefault "  Dynamics 365 organization URL" $defOrgUrl).TrimEnd('/')
+
+# View ID -- the GUID after viewid= in the view's URL.
+$viewIdIn = Read-WithDefault "  View ID (GUID from viewid= in the view URL)" $defViewId
+
+# Areas -- comma-separated; blank means alert on ALL areas.
+Write-Host "  Case Areas to alert on, comma-separated (e.g. Finance, Sales)."
+Write-Host "  Leave blank to alert on ALL areas."
+$areasIn  = Read-WithDefault "  Areas" ($defAreas -join ", ")
+$areasArr = @()
+if ($areasIn) {
+    $areasArr = @($areasIn -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+# Build the config JSON by hand so an empty area list serializes as [] (Windows
+# PowerShell 5.1's ConvertTo-Json mangles empty/single-item arrays) and the
+# explanatory _comment is preserved verbatim.
+$jsonEsc     = { param($s) ($s -replace '\\','\\\\') -replace '"','\"' }
+$areasJson   = if ($areasArr.Count -gt 0) {
+    '[' + (($areasArr | ForEach-Object { '"' + (& $jsonEsc $_) + '"' }) -join ', ') + ']'
+} else { '[]' }
+$sendEmailJson = if ($defSendEmail) { 'true' } else { 'false' }
+
+$configText = @"
+{
+  "_comment": "User settings for CNext Case Notification. orgUrl: your Dynamics 365 organization URL. viewId: GUID of the view to poll (the value after viewid= in the view URL). sendEmail: true to also send an Outlook email, false for toast-only. notifyEmailOverride: leave \"\" to alert your own mailbox (auto-detected); set an address to redirect (e.g. a shared mailbox). areaFilter: list of case Area names to alert on (e.g. \"Finance\", \"Sales\"), case-insensitive; leave [] to alert on ALL areas.",
+  "orgUrl": "$(& $jsonEsc $orgUrlIn)",
+  "viewId": "$(& $jsonEsc $viewIdIn)",
+  "sendEmail": $sendEmailJson,
+  "notifyEmailOverride": "$(& $jsonEsc $defOverride)",
+  "areaFilter": $areasJson
+}
+"@
+Set-Content -Path $configDst -Value $configText -Encoding UTF8
+Write-Host "  Saved settings to: $configName" -ForegroundColor Green
+
+# The preserved backup has now been folded into the new config; clean it up.
+if ($preservedConfig -and (Test-Path $preservedConfig)) {
     Remove-Item -Path $preservedConfig -Force -ErrorAction SilentlyContinue
-    Write-Host "  Restored existing user config: $configName"
-} elseif (Test-Path $configSrc) {
-    Copy-Item -Path $configSrc -Destination $configDst -Force
-    Write-Host "  Copied: $configName"
-} else {
-    Write-Warning "  Missing source file (skipped): $configSrc"
 }
 
 # --- 3b. (re)generate CNextCaseNotificationRun.vbs pointing at the new location ---

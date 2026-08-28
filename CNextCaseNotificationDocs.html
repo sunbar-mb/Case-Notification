@@ -663,6 +663,25 @@ CNextCaseNotificationRun.vbs</code></pre>
         <li class="step">
           <div class="step-num">3</div>
           <div class="step-body">
+            <div class="step-title">Answer the setup questions</div>
+            <p>Partway through, the installer asks you for the three per-user settings:</p>
+            <pre><code>Configure CNext Case Notification
+  Press Enter to accept the value shown in [brackets].
+  Dynamics 365 organization URL [https://yourorg.crm4.dynamics.com]:
+  View ID (GUID from viewid= in the view URL) []:
+  Case Areas to alert on, comma-separated (e.g. Finance, Sales).
+  Leave blank to alert on ALL areas.
+  Areas []:</code></pre>
+            <p>Type the value and press Enter, or just press Enter to accept the value shown in <code>[brackets]</code>. Your answers are written to <code>CNextCaseNotificationConfig.json</code> automatically — no manual editing needed. On a re-install your existing settings appear as the defaults, so you can breeze through with Enter.</p>
+            <div class="note">
+              <span class="note-icon">💡</span>
+              <span>Enter multiple Areas separated by commas, e.g. <code>Finance, Sales</code>. Leave the Areas answer blank to be alerted on cases in <strong>all</strong> areas.</span>
+            </div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
             <div class="step-title">Sign in to Dynamics 365 (first run only)</div>
             <p>The very first time the task fires, a browser window will open asking you to sign in to Dynamics 365. After that, the token is cached on disk and no further sign-in is needed.</p>
             <div class="note">
@@ -672,7 +691,7 @@ CNextCaseNotificationRun.vbs</code></pre>
           </div>
         </li>
         <li class="step">
-          <div class="step-num">4</div>
+          <div class="step-num">5</div>
           <div class="step-body">
             <div class="step-title">Allow Outlook to send (first alert only)</div>
             <p>On the first alert that triggers an email, Outlook may display a security dialog: <em>"A program is trying to send an email on your behalf."</em> Click <strong>Allow</strong>. This is a one-time Outlook setting.</p>
@@ -690,12 +709,13 @@ CNextCaseNotificationRun.vbs</code></pre>
     <!-- CONFIGURATION -->
     <section class="section" id="configuration">
       <h2>Configuration</h2>
-      <p>All user settings live in one file — <code>CNextCaseNotificationConfig.json</code> inside <code>C:\Scripts\CaseNotification\</code>. Open it in Notepad or any editor to change them; you never have to touch the PowerShell script. It's a plain JSON file, so keep the <code>"key": value</code> pairs and the commas between them intact. The installer does <strong>not</strong> overwrite this file on re-install, so your settings are preserved.</p>
+      <p>The installer already asks you for the most common settings — organization URL, view ID, and case Areas — and writes them for you, so most people never need this section. It's here for when you want to change a setting <em>after</em> installing, or adjust one of the options the installer doesn't prompt for (email on/off, redirect address).</p>
+      <p>All user settings live in one file — <code>CNextCaseNotificationConfig.json</code> inside <code>C:\Scripts\CaseNotification\</code>. Open it in Notepad or any editor to change them; you never have to touch the PowerShell script. It's a plain JSON file, so keep the <code>"key": value</code> pairs and the commas between them intact. Alternatively, just re-run the installer — it offers your current settings as defaults. Either way your settings are preserved on re-install.</p>
 
       <p>A complete file looks like this:</p>
       <pre style="background:var(--code-bg,#1e1e2e); color:var(--code-fg,#e0e0e0); padding:12px 16px; border-radius:8px; font-size:13px; overflow:auto;">{
-  "orgUrl": "https://hso.crm4.dynamics.com",
-  "viewId": "1a15c416-6670-eb11-a812-000d3adafcf9",
+  "orgUrl": "https://yourorg.crm4.dynamics.com",
+  "viewId": "00000000-0000-0000-0000-000000000000",
   "sendEmail": true,
   "notifyEmailOverride": "",
   "areaFilter": ["Finance", "Sales"]
@@ -716,12 +736,12 @@ CNextCaseNotificationRun.vbs</code></pre>
               <td>Your Dynamics 365 organization URL.
                 <span class="val-example">"https://yourorg.crm4.dynamics.com"</span>
               </td>
-              <td><code>https://hso.crm4.dynamics.com</code></td>
+              <td><code>https://yourorg.crm4.dynamics.com</code></td>
             </tr>
             <tr>
               <td>viewId</td>
               <td>GUID of the personal view to poll. See <a href="#config-view">Changing the view</a> below.
-                <span class="val-example">"1a15c416-6670-eb11-a812-000d3adafcf9"</span>
+                <span class="val-example">"00000000-0000-0000-0000-000000000000"</span>
               </td>
               <td>Unpicked cases view</td>
             </tr>

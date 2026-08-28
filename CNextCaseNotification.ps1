@@ -41,8 +41,8 @@ $seenFile = "$PSScriptRoot\CNextCaseNotificationSeen.json"
 $configFile = "$PSScriptRoot\CNextCaseNotificationConfig.json"
 
 # Defaults (used when the file or a given setting is absent).
-$orgUrl              = "https://hso.crm4.dynamics.com"
-$viewId              = "1a15c416-6670-eb11-a812-000d3adafcf9"   # "Unpicked cases - HSO INT Support & Optimizations" view
+$orgUrl              = "https://yourorg.crm4.dynamics.com"
+$viewId              = "00000000-0000-0000-0000-000000000000"   # GUID of the personal view to poll (from viewid= in the view URL)
 $sendEmail           = $true
 $notifyEmailOverride = ""
 $areaFilter          = @()
