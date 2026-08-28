@@ -1,0 +1,8 @@
+{
+  "_comment": "User settings for CNext Case Notification. orgUrl: your Dynamics 365 organization URL. viewId: GUID of the view to poll (the value after viewid= in the view URL). sendEmail: true to also send an Outlook email, false for toast-only. notifyEmailOverride: leave \"\" to alert your own mailbox (auto-detected); set an address to redirect (e.g. a shared mailbox). areaFilter: list of case Area names to alert on (e.g. \"Finance\", \"Sales\"), case-insensitive; leave [] to alert on ALL areas.",
+  "orgUrl": "https://hso.crm4.dynamics.com",
+  "viewId": "1a15c416-6670-eb11-a812-000d3adafcf9",
+  "sendEmail": true,
+  "notifyEmailOverride": "",
+  "areaFilter": []
+}

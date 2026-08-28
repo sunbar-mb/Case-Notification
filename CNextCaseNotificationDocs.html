@@ -554,6 +554,7 @@
     <span class="nav-group-label">Reference</span>
     <a class="nav-link" href="#configuration">Configuration</a>
     <a class="nav-link nav-link-sub" href="#config-view">Changing the view</a>
+    <a class="nav-link nav-link-sub" href="#config-area">Filtering by area</a>
     <a class="nav-link nav-link-sub" href="#config-email">Email settings</a>
     <a class="nav-link" href="#how-it-works">How It Works</a>
     <a class="nav-link" href="#troubleshooting">Troubleshooting</a>
@@ -645,6 +646,7 @@
             <p>Put the following files together in the same folder (e.g. a network share or USB drive you hand to colleagues):</p>
             <pre><code>CNextCaseNotificationInstall.ps1
 CNextCaseNotification.ps1
+CNextCaseNotificationConfig.json
 CNextCaseNotificationIcon.ico
 CNextCaseNotificationRun.vbs</code></pre>
           </div>
@@ -688,43 +690,59 @@ CNextCaseNotificationRun.vbs</code></pre>
     <!-- CONFIGURATION -->
     <section class="section" id="configuration">
       <h2>Configuration</h2>
-      <p>All settings are in the <code># --- config ---</code> block at the top of <code>CNextCaseNotification.ps1</code> inside <code>C:\Scripts\CaseNotification\</code>. Open the file in Notepad or any editor to change them.</p>
+      <p>All user settings live in one file — <code>CNextCaseNotificationConfig.json</code> inside <code>C:\Scripts\CaseNotification\</code>. Open it in Notepad or any editor to change them; you never have to touch the PowerShell script. It's a plain JSON file, so keep the <code>"key": value</code> pairs and the commas between them intact. The installer does <strong>not</strong> overwrite this file on re-install, so your settings are preserved.</p>
+
+      <p>A complete file looks like this:</p>
+      <pre style="background:var(--code-bg,#1e1e2e); color:var(--code-fg,#e0e0e0); padding:12px 16px; border-radius:8px; font-size:13px; overflow:auto;">{
+  "orgUrl": "https://hso.crm4.dynamics.com",
+  "viewId": "1a15c416-6670-eb11-a812-000d3adafcf9",
+  "sendEmail": true,
+  "notifyEmailOverride": "",
+  "areaFilter": ["Finance", "Sales"]
+}</pre>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Parameter</th>
+              <th>Setting</th>
               <th>What it does</th>
               <th>Default</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>$orgUrl</td>
+              <td>orgUrl</td>
               <td>Your Dynamics 365 organization URL.
                 <span class="val-example">"https://yourorg.crm4.dynamics.com"</span>
               </td>
               <td><code>https://hso.crm4.dynamics.com</code></td>
             </tr>
             <tr>
-              <td>$viewId</td>
+              <td>viewId</td>
               <td>GUID of the personal view to poll. See <a href="#config-view">Changing the view</a> below.
                 <span class="val-example">"1a15c416-6670-eb11-a812-000d3adafcf9"</span>
               </td>
               <td>Unpicked cases view</td>
             </tr>
             <tr>
-              <td>$sendEmail</td>
-              <td>Set to <code>$false</code> to disable email alerts and use toast-only notifications.</td>
-              <td><code>$true</code></td>
+              <td>sendEmail</td>
+              <td>Set to <code>false</code> to disable email alerts and use toast-only notifications.</td>
+              <td><code>true</code></td>
             </tr>
             <tr>
-              <td>$notifyEmailOverride</td>
-              <td>Leave empty to send alerts to your own mailbox (auto-detected). Set an address here to redirect to a shared mailbox or another recipient.
+              <td>notifyEmailOverride</td>
+              <td>Leave empty (<code>""</code>) to send alerts to your own mailbox (auto-detected). Set an address here to redirect to a shared mailbox or another recipient.
                 <span class="val-example">"support@yourorg.com"</span>
               </td>
               <td><code>""</code> (auto)</td>
+            </tr>
+            <tr>
+              <td>areaFilter</td>
+              <td>List of case Area names to alert on. See <a href="#config-area">Filtering by area</a> below.
+                <span class="val-example">["Finance", "Sales"]</span>
+              </td>
+              <td><code>[]</code> (all areas)</td>
             </tr>
           </tbody>
         </table>
@@ -732,19 +750,35 @@ CNextCaseNotificationRun.vbs</code></pre>
 
       <div class="note">
         <span class="note-icon">ℹ️</span>
-        <span>Do not change <code>$clientId</code> — it is Microsoft's pre-consented public client ID for Dataverse and requires no app registration in your tenant.</span>
+        <span>If the config file is missing, unreadable, or leaves a setting out, the script falls back to the built-in default for that setting, so it keeps working. The Dataverse client ID is fixed in the script and requires no app registration in your tenant — there is nothing to configure for authentication.</span>
       </div>
 
       <h3 id="config-view">Changing the view</h3>
-      <p>The script polls whichever Dynamics 365 view the <code>$viewId</code> points to. To point it at a different view:</p>
+      <p>The script polls whichever Dynamics 365 view the <code>viewId</code> setting points to. To point it at a different view:</p>
       <ol style="padding-left:20px; color:var(--text-2); font-size:13.5px; line-height:1.8;">
         <li>Open the view in Dynamics 365 in your browser.</li>
         <li>Copy the GUID from the URL — it is the value after <code>viewid=</code>.</li>
-        <li>Paste it as the value of <code>$viewId</code> in <code>CNextCaseNotification.ps1</code>.</li>
+        <li>Paste it as the value of <code>viewId</code> in <code>CNextCaseNotificationConfig.json</code>.</li>
       </ol>
       <div class="note">
         <span class="note-icon">⚠️</span>
         <span>The current view is a <strong>personal view</strong> — it is tied to the account that created it. If you distribute this script to colleagues, each person will need their own view with the same filters, or the view must be converted to a system (shared) view by an administrator.</span>
+      </div>
+
+      <h3 id="config-area">Filtering by area</h3>
+      <p>By default you are alerted on <strong>every</strong> new case in the view, regardless of its Area. To be alerted only on specific areas (for example <em>Finance</em> or <em>Sales</em>), edit the separate settings file <code>CNextCaseNotificationConfig.json</code> in <code>C:\Scripts\CaseNotification\</code>. This file is per-user and is <strong>not</strong> overwritten when the installer is re-run.</p>
+      <p>List the Area names you want in the <code>areaFilter</code> array — for example:</p>
+      <pre style="background:var(--code-bg,#1e1e2e); color:var(--code-fg,#e0e0e0); padding:12px 16px; border-radius:8px; font-size:13px; overflow:auto;">{
+  "areaFilter": ["Finance", "Sales"]
+}</pre>
+      <ul style="padding-left:20px; color:var(--text-2); font-size:13.5px; line-height:1.8;">
+        <li>Names must match the case <strong>Area</strong> exactly as it appears in Dynamics 365 (matching is <strong>case-insensitive</strong>, so <code>finance</code> also matches <code>Finance</code>).</li>
+        <li>Leave the list empty — <code>"areaFilter": []</code> — to be alerted on <strong>all</strong> areas (the default).</li>
+        <li>If you later add an area to the list, cases previously skipped for that area will be alerted on the next run.</li>
+      </ul>
+      <div class="note">
+        <span class="note-icon">ℹ️</span>
+        <span>The area filter is applied on top of the view. A case must both appear in the polled view <em>and</em> match one of your listed areas to trigger an alert.</span>
       </div>
 
       <h3 id="config-email">Email settings</h3>
@@ -795,15 +829,15 @@ CNextCaseNotificationRun.vbs</code></pre>
         </div>
         <div class="trouble-item">
           <div class="trouble-q">Cases no longer appear (view returns empty)</div>
-          <div class="trouble-a">The <code>$viewId</code> may point to a personal view owned by a different user. Confirm the view ID in <code>CNextCaseNotification.ps1</code> matches a view accessible to your account, or ask an administrator to create a shared system view.</div>
+          <div class="trouble-a">The <code>viewId</code> may point to a personal view owned by a different user. Confirm the view ID in <code>CNextCaseNotificationConfig.json</code> matches a view accessible to your account, or ask an administrator to create a shared system view.</div>
         </div>
         <div class="trouble-item">
           <div class="trouble-q">Task does not run outside of 08:00–17:00</div>
           <div class="trouble-a">This is by design. The scheduled task is configured to fire only on weekdays between 08:00 and 17:00. To change this, open <strong>Task Scheduler → CNext Case Notification → Properties → Triggers</strong> and edit the repetition settings.</div>
         </div>
         <div class="trouble-item">
-          <div class="trouble-q">Re-running the installer after changing CNextCaseNotification.ps1</div>
-          <div class="trouble-a">The installer overwrites all files from the source folder. Edit <code>CNextCaseNotification.ps1</code> in <code>C:\Scripts\CaseNotification\</code> directly — changes there are preserved between task runs and do not require re-installation.</div>
+          <div class="trouble-q">Will re-running the installer wipe my settings?</div>
+          <div class="trouble-a">No. The installer overwrites the program files from the source folder, but it deliberately leaves your <code>CNextCaseNotificationConfig.json</code> untouched if it already exists. Edit that file in <code>C:\Scripts\CaseNotification\</code> directly to change settings — your changes are preserved across task runs and re-installs.</div>
         </div>
       </div>
     </section>

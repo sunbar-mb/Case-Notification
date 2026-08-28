@@ -8,32 +8,75 @@
 # what you'd see opening the view in D365 CE.
 # ============================================================
 
-# --- config ---
-$orgUrl   = "https://hso.crm4.dynamics.com"
-$clientId = "51f81489-12ee-4a9e-aaae-a2591f45987d"   # Microsoft's pre-consented public client for Dataverse
-$viewId   = "1a15c416-6670-eb11-a812-000d3adafcf9"   # "Unpicked cases - HSO INT Support & Optimizations" view
-#$viewId   = "c01b731c-f18d-ea11-a811-000d3ab395a9"  # Testing only - your "Unassigned Cases" system view on Case (incident)
-#$viewId   = "97c84bb0-7169-f111-ab0c-000d3ade82c2"  # Testing only - My Cases view - for testing
+# --- internal constants (not user-editable) ---
+# $clientId is Microsoft's pre-consented public client for Dataverse -- it needs no
+# app registration in your tenant, so it stays in code rather than the config file.
+$clientId = "51f81489-12ee-4a9e-aaae-a2591f45987d"
 $seenFile = "$PSScriptRoot\CNextCaseNotificationSeen.json"
 
-# --- email notification ---
-# Sent via the Outlook desktop app (COM automation) so no credentials need to
-# be stored here. Requires Outlook to be installed and signed in on this PC.
-# If Outlook's security prompt ("A program is trying to send an email...")
-# pops up on first send, click Allow (and optionally extend the allowed time)
-# -- this is a one-time Outlook setting, not something the script controls.
+# ============================================================
+# --- user configuration ---
+# ============================================================
+# ALL user-editable settings live in CNextCaseNotificationConfig.json (same folder
+# as this script), so a colleague never has to touch the code. The values assigned
+# below are only DEFAULTS -- they are used when the config file is missing, can't be
+# parsed, or leaves a particular setting out. Anything present in the JSON overrides
+# the matching default here.
 #
-# The recipient is NOT hard-coded: each run detects the mailbox of whoever is
-# signed in on this PC and sends the alert to that person. So the same copy of
-# this script can be handed to any colleague without editing anything.
-# Resolution order (see Get-SelfEmailAddress below):
-#   1. Outlook's own Exchange identity (the mailbox the mail is sent from)
-#   2. The SMTP address of Outlook's first configured account
-#   3. The account used to sign in to Dynamics (MSAL token)
-# Only set $notifyEmailOverride if you deliberately want alerts to go somewhere
-# else (e.g. a shared mailbox); leave it empty for normal "send to myself" use.
+#   orgUrl              Your Dynamics 365 organization URL.
+#   viewId              GUID of the personal view to poll (the value after
+#                       viewid= in the view's URL).
+#   sendEmail           $true to also send an Outlook email; $false for toast-only.
+#                       Email is sent via the Outlook desktop app (COM automation),
+#                       so no credentials are stored anywhere. Requires Outlook to be
+#                       installed and signed in. If Outlook's "A program is trying to
+#                       send an email" prompt appears on first send, click Allow.
+#   notifyEmailOverride Leave "" to send the alert to yourself -- each run detects the
+#                       mailbox signed in on this PC (Exchange identity -> first
+#                       Outlook account -> Dynamics sign-in; see Get-SelfEmailAddress),
+#                       so the same script works for any colleague unedited. Set an
+#                       address only to redirect alerts elsewhere (e.g. a shared mailbox).
+#   areaFilter          Array of case Area names to alert on (e.g. "Finance", "Sales").
+#                       Matching is case-insensitive. Empty = alert on all areas.
+$configFile = "$PSScriptRoot\CNextCaseNotificationConfig.json"
+
+# Defaults (used when the file or a given setting is absent).
+$orgUrl              = "https://hso.crm4.dynamics.com"
+$viewId              = "1a15c416-6670-eb11-a812-000d3adafcf9"   # "Unpicked cases - HSO INT Support & Optimizations" view
 $sendEmail           = $true
 $notifyEmailOverride = ""
+$areaFilter          = @()
+
+if (Test-Path $configFile) {
+    try {
+        $config = Get-Content $configFile -Raw | ConvertFrom-Json
+
+        # Strings: override only when the key is present and non-blank, so an empty
+        # or missing entry falls back to the default rather than blanking the setting.
+        if ($config.PSObject.Properties['orgUrl'] -and $config.orgUrl.ToString().Trim()) {
+            $orgUrl = $config.orgUrl.ToString().Trim()
+        }
+        if ($config.PSObject.Properties['viewId'] -and $config.viewId.ToString().Trim()) {
+            $viewId = $config.viewId.ToString().Trim()
+        }
+        # notifyEmailOverride may legitimately be "" (send to self), so honour the
+        # key whenever it's present, blank or not.
+        if ($config.PSObject.Properties['notifyEmailOverride']) {
+            $notifyEmailOverride = $config.notifyEmailOverride.ToString().Trim()
+        }
+        # Boolean: accept true/false (and common string forms) from the JSON.
+        if ($config.PSObject.Properties['sendEmail'] -and $null -ne $config.sendEmail) {
+            $sendEmail = [System.Convert]::ToBoolean($config.sendEmail)
+        }
+        # Area filter: keep only non-empty, trimmed entries so stray blanks in the
+        # JSON don't turn into an area that can never match.
+        if ($config.areaFilter) {
+            $areaFilter = @($config.areaFilter | Where-Object { $_ -and $_.ToString().Trim() } | ForEach-Object { $_.ToString().Trim() })
+        }
+    } catch {
+        Write-Warning "Could not read $configFile ($_). Using built-in defaults."
+    }
+}
 
 # --- toast branding ---
 # Windows shows the AppId's registered DisplayName as the toast title.
@@ -85,6 +128,22 @@ $queryUri     = "$orgUrl/api/data/v9.2/incidents?fetchXml=$encodedFetch"
 
 $result     = Invoke-RestMethod -Uri $queryUri -Headers $headers -Method Get
 $currentIds = @($result.value.incidentid)   # @() forces array even with 0 or 1 results
+
+# --- 2b. optional: keep only cases whose Area matches the user's filter ---
+# Done BEFORE the "seen" diff so non-matching cases never enter the seen file.
+# That way, if a colleague later adds an Area to their filter, cases that were
+# previously skipped for that Area are treated as new and do get alerted on.
+# The Area is a lookup, so its human-readable name arrives via the FormattedValue
+# annotation (already requested in the Prefer header above).
+if ($areaFilter.Count -gt 0 -and $currentIds.Count -gt 0) {
+    $currentIds = @($currentIds | Where-Object {
+        $areaUri  = "$orgUrl/api/data/v9.2/incidents($_)?`$select=_tnxt_areaid_value"
+        $areaResp = Invoke-RestMethod -Uri $areaUri -Headers $headers -Method Get
+        $thisArea = $areaResp.'_tnxt_areaid_value@OData.Community.Display.V1.FormattedValue'
+        # -contains is case-insensitive for strings, so "finance" matches "Finance".
+        $thisArea -and ($areaFilter -contains $thisArea)
+    })
+}
 
 # --- 3. diff against what we've already notified on ---
 $seen = if (Test-Path $seenFile) {

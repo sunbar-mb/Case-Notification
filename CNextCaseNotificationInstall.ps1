@@ -8,6 +8,7 @@
    2. Creates  C:\Scripts\CaseNotification
    3. Copies the required files into that folder:
         - CNextCaseNotification.ps1         (the poller)
+        - CNextCaseNotificationConfig.json  (per-user area filter; kept on re-install)
         - CNextCaseNotificationRun.vbs          (launches the poller with no window)
         - CNextCaseNotificationIcon.ico      (toast header badge)
         - CNextCaseNotificationDocs.html     (installation & configuration guide)
@@ -21,8 +22,10 @@
    or from an elevated/normal PowerShell prompt:
      powershell -ExecutionPolicy Bypass -File .\CNextCaseNotificationInstall.ps1
 
- Safe to re-run: it overwrites the copied files and replaces the
- scheduled task each time.
+ Safe to re-run / override an existing install: it stops and removes any
+ previously installed version (task + running poll + old files), then installs
+ fresh. The user's CNextCaseNotificationConfig.json is preserved across the
+ override.
 ============================================================
 #>
 
@@ -43,6 +46,67 @@ $filesToCopy = @(
 )
 
 Write-Host "Installing CNext Case Notification..." -ForegroundColor Cyan
+
+# --- 0. remove any existing installation first (override) ---
+# Ensures a clean install over the top of an older/running version: stop the
+# scheduled task, kill any poll that's currently running (so its files aren't
+# locked), then clear out the old install folder. The user's config is
+# preserved and re-seeded afterwards.
+Write-Host "Removing any existing installation..."
+
+# Stop and remove the existing scheduled task if present.
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    try {
+        if ($existingTask.State -eq "Running") {
+            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            Write-Host "  Stopped running task: $taskName"
+        }
+    } catch {}
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
+        Write-Host "  Removed existing task: $taskName"
+    } catch {
+        Write-Warning "  Could not remove existing task: $_"
+    }
+}
+
+# Kill any lingering poll (wscript running the .vbs, or PowerShell running the
+# poller) so the old files can be replaced without file-lock errors.
+$oldVbs    = Join-Path $installDir "CNextCaseNotificationRun.vbs"
+$oldScript = Join-Path $installDir "CNextCaseNotification.ps1"
+foreach ($procName in @("wscript", "powershell")) {
+    Get-CimInstance Win32_Process -Filter "Name = '$procName.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ProcessId -ne $PID -and
+            $_.CommandLine -and
+            ($_.CommandLine -like "*$oldVbs*" -or $_.CommandLine -like "*$oldScript*")
+        } |
+        ForEach-Object {
+            try {
+                Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+                Write-Host "  Stopped running poll process (PID $($_.ProcessId))."
+            } catch {}
+        }
+}
+
+# Preserve the user's config across the wipe, then delete the old install folder.
+$configName    = "CNextCaseNotificationConfig.json"
+$preservedConfig = $null
+$existingConfig  = Join-Path $installDir $configName
+if (Test-Path $existingConfig) {
+    $preservedConfig = Join-Path $env:TEMP "$configName.installbackup"
+    Copy-Item -Path $existingConfig -Destination $preservedConfig -Force
+    Write-Host "  Preserved existing user config."
+}
+if (Test-Path $installDir) {
+    try {
+        Remove-Item -Path $installDir -Recurse -Force -ErrorAction Stop
+        Write-Host "  Cleared old install folder: $installDir"
+    } catch {
+        Write-Warning "  Could not fully clear old install folder: $_"
+    }
+}
 
 # --- 1 & 2. create folders ---
 foreach ($dir in @($rootDir, $installDir)) {
@@ -78,6 +142,23 @@ foreach ($file in $filesToCopy) {
     } else {
         Write-Warning "  Missing source file (skipped): $src"
     }
+}
+
+# --- 3a2. restore or seed the user config ---
+# CNextCaseNotificationConfig.json holds the user's own area filter, so it must
+# survive an override install. If one was preserved from a previous install we
+# restore it; otherwise we seed a fresh copy from the source folder.
+$configSrc  = Join-Path $sourceDir $configName
+$configDst  = Join-Path $installDir $configName
+if ($preservedConfig -and (Test-Path $preservedConfig)) {
+    Copy-Item -Path $preservedConfig -Destination $configDst -Force
+    Remove-Item -Path $preservedConfig -Force -ErrorAction SilentlyContinue
+    Write-Host "  Restored existing user config: $configName"
+} elseif (Test-Path $configSrc) {
+    Copy-Item -Path $configSrc -Destination $configDst -Force
+    Write-Host "  Copied: $configName"
+} else {
+    Write-Warning "  Missing source file (skipped): $configSrc"
 }
 
 # --- 3b. (re)generate CNextCaseNotificationRun.vbs pointing at the new location ---
@@ -119,12 +200,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 
-# Replace any existing task with the same name.
-if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-    Write-Host "  Removed existing task: $taskName"
-}
-
+# The existing task (if any) was already removed during the cleanup step above.
 Register-ScheduledTask -TaskName $taskName `
     -Action $action `
     -Trigger $trigger `
